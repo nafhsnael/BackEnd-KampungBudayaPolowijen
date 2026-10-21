@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ApiResponse } from '../utils/response.util';
+import { UnauthorizedError } from '../errors/app.error';
 
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -16,6 +17,35 @@ export class AuthController {
         statusCode: 200,
         message: 'Login successful',
         data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  adminLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.authService.login(req.body, true);
+      ApiResponse.success({
+        res,
+        statusCode: 200,
+        message: 'Admin login successful',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.auth) throw new UnauthorizedError('Authentication is required');
+      await this.authService.logout(req.auth);
+      ApiResponse.success({
+        res,
+        statusCode: 200,
+        message: 'Logout successful',
+        data: null,
       });
     } catch (error) {
       next(error);

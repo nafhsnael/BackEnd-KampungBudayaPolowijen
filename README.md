@@ -72,7 +72,47 @@ npm start
 
 ---
 
-## 📡 Endpoint API Auth
+## 📡 Endpoint API
+
+Semua respons API menggunakan format `{ "success": true, "message": "...", "data": ... }`.
+Header akses admin dan logout: `Authorization: Bearer <accessToken>`.
+
+### Authentication
+
+| Method | Endpoint | Kegunaan |
+|---|---|---|
+| `POST` | `/api/auth/login` | Login pengguna |
+| `POST` | `/api/auth/admin/login` | Login khas admin; pengguna bukan admin ditolak |
+| `POST` | `/api/auth/logout` | Batalkan token semasa |
+| `POST` | `/api/auth/google` | Login OAuth Google (mock sedia ada) |
+
+Kedua-dua endpoint login menerima JSON `{ "email": "...", "password": "..." }`.
+Respons login mengandungi `data.user` (termasuk `role`) dan `data.accessToken`.
+Logout memerlukan token akses dan token yang dibatalkan tidak boleh digunakan semula.
+Jadual `revoked_tokens` diwujudkan oleh `database/schema.sql`; jalankan skrip itu pada
+database sedia ada sebelum menggunakan fungsi logout.
+
+### Admin dashboard dan pengurusan pengguna
+
+Semua route `/api/admin/*` memerlukan token pengguna berperanan `admin`.
+
+| Method | Endpoint | Kegunaan |
+|---|---|---|
+| `GET` | `/api/admin/dashboard/stats` | Statistik ringkas |
+| `GET` | `/api/admin/users?search=budi&role=user&page=1&limit=10` | Carian, penapis dan pagination |
+| `POST` | `/api/admin/users` | Cipta pengguna |
+| `GET` | `/api/admin/users/:id` | Dapatkan butiran pengguna |
+| `PUT` | `/api/admin/users/:id` | Kemaskini satu atau lebih medan |
+| `DELETE` | `/api/admin/users/:id` | Padam pengguna |
+
+Body cipta pengguna: `{ "email": "...", "fullName": "...", "password": "...", "role": "user" }`.
+Kemaskini menerima `email`, `fullName`, `password`, `role`, dan/atau `avatarUrl`.
+Senarai memulangkan `data.users`, `data.total` dan metadata `data.pagination`.
+Statistik memulangkan `totalUsers`, `totalUmkm`, `totalEvents`, dan `activePackages`.
+Statistik modul UMKM, event, atau paket ialah `null` sehingga jadual berkenaan wujud;
+skema sekarang hanya menyediakan jadual `users`.
+
+### Endpoint auth terdahulu
 
 ### 1. Standard Login (Email & Password)
 - **URL**: `POST /api/auth/login`

@@ -4,6 +4,7 @@ import { AuthService } from '../services/auth.service';
 import { UserRepository } from '../repositories/user.repository';
 import { validateBody } from '../middlewares/validate.middleware';
 import { LoginSchema, GoogleLoginSchema } from '../dtos/auth.dto';
+import { authMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
 
@@ -18,6 +19,8 @@ const authController = new AuthController(authService);
  * @access  Public
  */
 router.post('/login', validateBody(LoginSchema), authController.login);
+router.post('/admin/login', validateBody(LoginSchema), authController.adminLogin);
+router.post('/logout', authMiddleware, authController.logout);
 
 /**
  * @route   POST /api/auth/google

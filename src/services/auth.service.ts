@@ -3,27 +3,36 @@ import { IUserRepository } from '../repositories/user.repository.interface';
 import { UnauthorizedError } from '../errors/app.error';
 import { PasswordUtil } from '../utils/password.util';
 import { JwtUtil } from '../utils/jwt.util';
+import { TokenRepository } from '../repositories/token.repository';
 
 export interface AuthResponseData {
   user: {
     id: string;
     email: string;
     fullName: string;
+    role: 'user' | 'admin';
     avatarUrl?: string;
   };
   accessToken: string;
 }
 
 export class AuthService {
-  constructor(private readonly userRepository: IUserRepository) {}
+  constructor(
+    private readonly userRepository: IUserRepository,
+    private readonly tokenRepository = new TokenRepository()
+  ) {}
 
   /**
    * Standard Login with Email and Password
    */
-  async login(dto: LoginDTO): Promise<AuthResponseData> {
+  async login(dto: LoginDTO, adminOnly = false): Promise<AuthResponseData> {
     const user = await this.userRepository.findByEmail(dto.email);
 
     if (!user || !user.password) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    if (adminOnly && user.role !== 'admin') {
       throw new UnauthorizedError('Invalid email or password');
     }
 
@@ -37,6 +46,7 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       fullName: user.fullName,
+      role: user.role ?? 'user',
     });
 
     return {
@@ -44,6 +54,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        role: user.role ?? 'user',
         avatarUrl: user.avatarUrl,
       },
       accessToken,
@@ -83,6 +94,7 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       fullName: user.fullName,
+      role: user.role ?? 'user',
     });
 
     return {
@@ -90,9 +102,14 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        role: user.role ?? 'user',
         avatarUrl: user.avatarUrl,
       },
       accessToken,
     };
+  }
+
+  async logout(token: { jti: string; exp: number }): Promise<void> {
+    await this.tokenRepository.revoke(token.jti, new Date(token.exp * 1000));
   }
 }

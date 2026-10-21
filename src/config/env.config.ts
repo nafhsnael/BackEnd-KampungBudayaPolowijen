@@ -10,6 +10,13 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   GOOGLE_CLIENT_ID: z.string().optional(),
+
+  // ── MySQL Database ─────────────────────────────────────────
+  DB_HOST:     z.string().default('localhost'),
+  DB_PORT:     z.string().default('3306').transform((val) => parseInt(val, 10)),
+  DB_USER:     z.string().min(1, 'DB_USER is required'),
+  DB_PASSWORD: z.string().default(''),
+  DB_NAME:     z.string().min(1, 'DB_NAME is required'),
 });
 
 const parseResult = envSchema.safeParse(process.env);
