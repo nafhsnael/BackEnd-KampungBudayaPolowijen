@@ -90,7 +90,7 @@ export class AdminController {
     try {
       const parsed = UpdateUserSchema.safeParse(req.body);
       if (!parsed.success) throw new BadRequestError(validationMessage(parsed.error));
-      if (req.params.id === req.auth?.userId && parsed.data.role === 'user') {
+      if (req.params.id === req.auth?.userId && (parsed.data.role === 'user' || parsed.data.access === 'user')) {
         throw new ForbiddenError('You cannot remove your own administrator access');
       }
       const { password, ...fields } = parsed.data;

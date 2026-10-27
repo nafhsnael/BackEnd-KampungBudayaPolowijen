@@ -2,13 +2,16 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database';
 import { ConflictError, NotFoundError } from '../errors/app.error';
-import { User, UserRole } from '../models/user.model';
+import { UserRole, UserStatus } from '../models/user.model';
 
 interface UserRow extends RowDataPacket {
   id: string;
   email: string;
   full_name: string;
+  username: string | null;
+  role_title: string | null;
   role: UserRole;
+  status: UserStatus;
   avatar_url: string | null;
   created_at: Date;
   updated_at: Date;
@@ -23,12 +26,30 @@ interface TableRow extends RowDataPacket {
   has_active_column: number;
 }
 
-function mapUser(row: UserRow): Omit<User, 'password' | 'googleId'> {
+export interface AdminUserItem {
+  id: string;
+  role: string;
+  roleTitle?: string;
+  fullName: string;
+  email: string;
+  username: string;
+  access: UserRole;
+  status: UserStatus;
+  avatarUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function mapUser(row: UserRow): AdminUserItem {
   return {
     id: row.id,
-    email: row.email,
+    role: row.role_title || row.full_name || (row.role === 'admin' ? 'Super Admin' : 'User'),
+    roleTitle: row.role_title ?? (row.role === 'admin' ? 'Super Admin' : 'User'),
     fullName: row.full_name,
-    role: row.role,
+    email: row.email,
+    username: row.username || row.email.split('@')[0],
+    access: row.role,
+    status: row.status ?? 'Aktif',
     avatarUrl: row.avatar_url ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -42,7 +63,7 @@ function throwIfDuplicate(error: unknown): never {
     'code' in error &&
     error.code === 'ER_DUP_ENTRY'
   ) {
-    throw new ConflictError('A user with this email already exists');
+    throw new ConflictError('User dengan email atau username ini sudah terdaftar');
   }
   throw error;
 }
@@ -50,39 +71,59 @@ function throwIfDuplicate(error: unknown): never {
 export class AdminRepository {
   async listUsers(filters: {
     search?: string;
-    role?: UserRole;
+    role?: string;
+    access?: UserRole;
+    status?: string;
     page: number;
     limit: number;
-  }): Promise<{ users: Omit<User, 'password' | 'googleId'>[]; total: number }> {
+  }): Promise<{ users: AdminUserItem[]; total: number }> {
     const clauses: string[] = [];
     const values: (string | number)[] = [];
-    if (filters.role) {
+
+    if (filters.access) {
       clauses.push('role = ?');
-      values.push(filters.role);
+      values.push(filters.access);
     }
+
+    if (filters.status && filters.status !== 'Semua') {
+      clauses.push('status = ?');
+      values.push(filters.status);
+    }
+
+    if (filters.role && filters.role !== 'Semua') {
+      clauses.push('(role_title LIKE ? OR role = ?)');
+      values.push(`%${filters.role}%`, filters.role);
+    }
+
     if (filters.search) {
-      clauses.push('(full_name LIKE ? OR email LIKE ?)');
-      values.push(`%${filters.search}%`, `%${filters.search}%`);
+      clauses.push('(full_name LIKE ? OR email LIKE ? OR username LIKE ? OR role_title LIKE ?)');
+      const term = `%${filters.search}%`;
+      values.push(term, term, term, term);
     }
+
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const [countRows] = await pool.query<CountRow[]>(
       `SELECT COUNT(*) AS total FROM users ${where}`,
       values
     );
+
     const offset = (filters.page - 1) * filters.limit;
     const [rows] = await pool.query<UserRow[]>(
-      `SELECT id, email, full_name, role, avatar_url, created_at, updated_at
+      `SELECT id, email, full_name, username, role_title, role, status, avatar_url, created_at, updated_at
        FROM users ${where}
-       ORDER BY created_at DESC
+       ORDER BY 
+         CASE WHEN id REGEXP '^[0-9]+$' THEN CAST(id AS UNSIGNED) ELSE 999999 END ASC,
+         created_at ASC
        LIMIT ? OFFSET ?`,
       [...values, filters.limit, offset]
     );
+
     return { users: rows.map(mapUser), total: countRows[0].total };
   }
 
-  async findUser(id: string): Promise<Omit<User, 'password' | 'googleId'>> {
+  async findUser(id: string): Promise<AdminUserItem> {
     const [rows] = await pool.query<UserRow[]>(
-      `SELECT id, email, full_name, role, avatar_url, created_at, updated_at
+      `SELECT id, email, full_name, username, role_title, role, status, avatar_url, created_at, updated_at
        FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
@@ -92,17 +133,27 @@ export class AdminRepository {
 
   async createUser(user: {
     email: string;
-    fullName: string;
-    role: UserRole;
+    fullName?: string;
+    username?: string;
+    roleTitle?: string;
+    role?: string;
+    access?: UserRole;
+    status?: UserStatus;
     passwordHash: string;
     avatarUrl?: string | null;
-  }): Promise<Omit<User, 'password' | 'googleId'>> {
+  }): Promise<AdminUserItem> {
     const id = uuidv4();
+    const systemRole: UserRole = user.access ?? (user.role === 'admin' ? 'admin' : 'user');
+    const roleTitle = user.roleTitle ?? user.role ?? (systemRole === 'admin' ? 'Super Admin' : 'User');
+    const fullName = user.fullName ?? roleTitle;
+    const username = user.username ?? user.email.split('@')[0];
+    const status: UserStatus = user.status ?? 'Aktif';
+
     try {
       await pool.query<ResultSetHeader>(
-        `INSERT INTO users (id, email, password_hash, full_name, role, avatar_url)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [id, user.email, user.passwordHash, user.fullName, user.role, user.avatarUrl ?? null]
+        `INSERT INTO users (id, email, password_hash, full_name, username, role_title, role, status, avatar_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, user.email, user.passwordHash, fullName, username, roleTitle, systemRole, status, user.avatarUrl ?? null]
       );
     } catch (error) {
       throwIfDuplicate(error);
@@ -115,32 +166,59 @@ export class AdminRepository {
     updates: {
       email?: string;
       fullName?: string;
-      role?: UserRole;
+      username?: string;
+      roleTitle?: string;
+      role?: string;
+      access?: UserRole;
+      status?: UserStatus;
       passwordHash?: string;
       avatarUrl?: string | null;
     }
-  ): Promise<Omit<User, 'password' | 'googleId'>> {
-    const columns: Record<string, string> = {
-      email: 'email',
-      fullName: 'full_name',
-      role: 'role',
-      passwordHash: 'password_hash',
-      avatarUrl: 'avatar_url',
-    };
-    const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
-    try {
-      const [result] = await pool.query<ResultSetHeader>(
-        `UPDATE users SET ${entries.map(([key]) => `${columns[key]} = ?`).join(', ')}
-         WHERE id = ?`,
-        [...entries.map(([, value]) => value), id]
-      );
-      if (result.affectedRows === 0) {
-        const existing = await this.findUser(id);
-        return existing;
+  ): Promise<AdminUserItem> {
+    const dbUpdates: Record<string, string | null | undefined> = {};
+
+    if (updates.email !== undefined) dbUpdates.email = updates.email;
+    if (updates.fullName !== undefined) dbUpdates.full_name = updates.fullName;
+    if (updates.username !== undefined) dbUpdates.username = updates.username;
+
+    // FE sends role = "Super Admin" / "Manajer UMKM", map to role_title
+    if (updates.roleTitle !== undefined) {
+      dbUpdates.role_title = updates.roleTitle;
+    } else if (updates.role !== undefined) {
+      // If role is sent as string title:
+      dbUpdates.role_title = updates.role;
+      if (!updates.fullName) {
+        dbUpdates.full_name = updates.role;
       }
-    } catch (error) {
-      throwIfDuplicate(error);
     }
+
+    if (updates.access !== undefined) {
+      dbUpdates.role = updates.access;
+    } else if (updates.role === 'admin' || updates.role === 'user') {
+      dbUpdates.role = updates.role;
+    }
+
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.passwordHash !== undefined) dbUpdates.password_hash = updates.passwordHash;
+    if (updates.avatarUrl !== undefined) dbUpdates.avatar_url = updates.avatarUrl;
+
+    const entries = Object.entries(dbUpdates).filter(([, value]) => value !== undefined);
+    if (entries.length > 0) {
+      try {
+        const [result] = await pool.query<ResultSetHeader>(
+          `UPDATE users SET ${entries.map(([key]) => `${key} = ?`).join(', ')}
+           WHERE id = ?`,
+          [...entries.map(([, value]) => value), id]
+        );
+        if (result.affectedRows === 0) {
+          // Check if user exists
+          await this.findUser(id);
+        }
+      } catch (error) {
+        throwIfDuplicate(error);
+      }
+    }
+
     return this.findUser(id);
   }
 

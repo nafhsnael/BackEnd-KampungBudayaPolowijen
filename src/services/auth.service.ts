@@ -9,8 +9,12 @@ export interface AuthResponseData {
   user: {
     id: string;
     email: string;
+    username?: string;
     fullName: string;
     role: 'user' | 'admin';
+    access?: 'user' | 'admin';
+    roleTitle?: string;
+    status?: 'Aktif' | 'Suspended';
     avatarUrl?: string;
   };
   accessToken: string;
@@ -26,14 +30,24 @@ export class AuthService {
    * Standard Login with Email and Password
    */
   async login(dto: LoginDTO, adminOnly = false): Promise<AuthResponseData> {
-    const user = await this.userRepository.findByEmail(dto.email);
+    const identifier = dto.email.trim();
+    let user = await this.userRepository.findByEmail(identifier);
+
+    // Fallback: juga dukung login menggunakan username jika user memasukkan username
+    if (!user) {
+      user = await this.userRepository.findByUsername(identifier);
+    }
 
     if (!user || !user.password) {
       throw new UnauthorizedError('Invalid email or password');
     }
 
     if (adminOnly && user.role !== 'admin') {
-      throw new UnauthorizedError('Invalid email or password');
+      throw new UnauthorizedError('Akun ini tidak memiliki hak akses administrator');
+    }
+
+    if (user.status === 'Suspended') {
+      throw new UnauthorizedError('Akun Anda sedang dinonaktifkan (Suspended). Silakan hubungi administrator.');
     }
 
     const isPasswordValid = await PasswordUtil.compare(dto.password, user.password);
@@ -53,8 +67,12 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        username: user.username,
         fullName: user.fullName,
         role: user.role ?? 'user',
+        access: user.role ?? 'user',
+        roleTitle: user.roleTitle,
+        status: user.status ?? 'Aktif',
         avatarUrl: user.avatarUrl,
       },
       accessToken,
@@ -65,8 +83,7 @@ export class AuthService {
    * OAuth Login using Google ID Token
    */
   async googleLogin(dto: GoogleLoginDTO): Promise<AuthResponseData> {
-    // In production environment, verify token using google-auth-library (OAuth2Client.verifyIdToken)
-    // Here we simulate Google token payload verification
+    // In production environment, verify token using google-auth-library
     const mockGooglePayload = {
       googleId: 'google-sub-id-123456',
       email: 'googleuser@example.com',
@@ -81,13 +98,20 @@ export class AuthService {
     }
 
     if (!user) {
-      // If user doesn't exist, create user automatically from Google Profile
       user = await this.userRepository.create({
         email: mockGooglePayload.email,
         fullName: mockGooglePayload.fullName,
+        username: mockGooglePayload.email.split('@')[0],
+        roleTitle: 'User',
+        role: 'user',
+        status: 'Aktif',
         googleId: mockGooglePayload.googleId,
         avatarUrl: mockGooglePayload.avatarUrl,
       });
+    }
+
+    if (user.status === 'Suspended') {
+      throw new UnauthorizedError('Akun Anda sedang dinonaktifkan (Suspended). Silakan hubungi administrator.');
     }
 
     const accessToken = JwtUtil.generateToken({
@@ -101,8 +125,12 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        username: user.username,
         fullName: user.fullName,
         role: user.role ?? 'user',
+        access: user.role ?? 'user',
+        roleTitle: user.roleTitle,
+        status: user.status ?? 'Aktif',
         avatarUrl: user.avatarUrl,
       },
       accessToken,

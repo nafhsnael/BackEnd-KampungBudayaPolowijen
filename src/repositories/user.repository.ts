@@ -6,14 +6,16 @@ import { IUserRepository } from './user.repository.interface';
 
 /**
  * Tipe internal yang merepresentasikan baris dari tabel `users` di MySQL.
- * Kolom snake_case DB -> dipetakan ke camelCase model User.
  */
 interface UserRow extends RowDataPacket {
   id:            string;
   email:         string;
   password_hash: string | null;
   full_name:     string;
+  username?:     string | null;
+  role_title?:   string | null;
   role:          'user' | 'admin';
+  status?:       'Aktif' | 'Suspended';
   google_id:     string | null;
   avatar_url:    string | null;
   created_at:    Date;
@@ -26,8 +28,12 @@ function mapRowToUser(row: UserRow): User {
     id:        row.id,
     email:     row.email,
     fullName:  row.full_name,
-    password:  row.password_hash ?? undefined,
+    username:  row.username ?? row.email.split('@')[0],
+    roleTitle: row.role_title ?? (row.role === 'admin' ? 'Super Admin' : 'User'),
     role:      row.role,
+    access:    row.role,
+    status:    row.status ?? 'Aktif',
+    password:  row.password_hash ?? undefined,
     googleId:  row.google_id   ?? undefined,
     avatarUrl: row.avatar_url  ?? undefined,
     createdAt: row.created_at,
@@ -35,14 +41,19 @@ function mapRowToUser(row: UserRow): User {
   };
 }
 
+const SELECT_FIELDS = `
+  id, email, password_hash, full_name,
+  username, role_title, role, status,
+  google_id, avatar_url, created_at, updated_at
+`;
+
 export class UserRepository implements IUserRepository {
   /**
    * Cari user berdasarkan email.
-   * Query menggunakan parameterized statement -> aman dari SQL Injection.
    */
   async findByEmail(email: string): Promise<User | null> {
     const sql = `
-      SELECT id, email, password_hash, full_name, role, google_id, avatar_url, created_at, updated_at
+      SELECT ${SELECT_FIELDS}
       FROM users
       WHERE email = ?
       LIMIT 1
@@ -52,11 +63,25 @@ export class UserRepository implements IUserRepository {
   }
 
   /**
+   * Cari user berdasarkan username.
+   */
+  async findByUsername(username: string): Promise<User | null> {
+    const sql = `
+      SELECT ${SELECT_FIELDS}
+      FROM users
+      WHERE username = ?
+      LIMIT 1
+    `;
+    const [rows] = await pool.query<UserRow[]>(sql, [username]);
+    return rows.length > 0 ? mapRowToUser(rows[0]) : null;
+  }
+
+  /**
    * Cari user berdasarkan primary key ID.
    */
   async findById(id: string): Promise<User | null> {
     const sql = `
-      SELECT id, email, password_hash, full_name, role, google_id, avatar_url, created_at, updated_at
+      SELECT ${SELECT_FIELDS}
       FROM users
       WHERE id = ?
       LIMIT 1
@@ -70,7 +95,7 @@ export class UserRepository implements IUserRepository {
    */
   async findByGoogleId(googleId: string): Promise<User | null> {
     const sql = `
-      SELECT id, email, password_hash, full_name, role, google_id, avatar_url, created_at, updated_at
+      SELECT ${SELECT_FIELDS}
       FROM users
       WHERE google_id = ?
       LIMIT 1
@@ -81,25 +106,26 @@ export class UserRepository implements IUserRepository {
 
   /**
    * Buat user baru di database.
-   * ID di-generate di aplikasi menggunakan UUID v4.
    */
   async create(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
     const newId = uuidv4();
     const sql = `
-      INSERT INTO users (id, email, password_hash, full_name, role, google_id, avatar_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, email, password_hash, full_name, username, role_title, role, status, google_id, avatar_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     await pool.query<ResultSetHeader>(sql, [
       newId,
       userData.email,
       userData.password   ?? null,
       userData.fullName,
+      userData.username   ?? userData.email.split('@')[0],
+      userData.roleTitle  ?? (userData.role === 'admin' ? 'Super Admin' : 'User'),
       userData.role       ?? 'user',
+      userData.status     ?? 'Aktif',
       userData.googleId   ?? null,
       userData.avatarUrl  ?? null,
     ]);
 
-    // Ambil record yang baru dibuat untuk mendapatkan timestamp dari DB
     const created = await this.findById(newId);
     if (!created) {
       throw new Error('Failed to retrieve newly created user');

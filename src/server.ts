@@ -6,8 +6,12 @@ import pool from './config/database';
 const PORT = envConfig.PORT;
 
 async function bootstrap(): Promise<void> {
-  // Validasi koneksi database sebelum server mulai menerima request
-  await testDatabaseConnection();
+  // Cek koneksi database saat startup
+  try {
+    await testDatabaseConnection();
+  } catch (err) {
+    console.warn('⚠️ Peringatan: Belum dapat terhubung ke MySQL. Pastikan MySQL di XAMPP sudah di-start.');
+  }
 
   const server = app.listen(PORT, () => {
     console.log(`=================================`);
