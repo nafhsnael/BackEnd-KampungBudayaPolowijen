@@ -78,3 +78,36 @@ ON DUPLICATE KEY UPDATE
   role       = VALUES(role),
   status     = VALUES(status),
   updated_at = NOW();
+
+
+-- ============================================================
+-- Tabel: umkm (Data Usaha Mikro Kecil & Menengah + URL Gambar Vercel Blob)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS umkm (
+  id          VARCHAR(36)    NOT NULL DEFAULT (UUID()),
+  name        VARCHAR(150)   NOT NULL,
+  category    VARCHAR(100)   NOT NULL COMMENT 'Kriya, Kuliner, Minuman, dll.',
+  description TEXT           NULL,
+  price       DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+  image_url   VARCHAR(500)   NULL     COMMENT 'URL publik Vercel Blob Storage',
+  created_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- Tabel: events (Data Event/Agenda Budaya + URL Poster Vercel Blob)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS events (
+  id          VARCHAR(36)    NOT NULL DEFAULT (UUID()),
+  name        VARCHAR(150)   NOT NULL,
+  description TEXT           NULL,
+  event_date  DATE           NOT NULL,
+  capacity    VARCHAR(100)   NULL DEFAULT '50 Orang',
+  price       VARCHAR(100)   NULL DEFAULT 'Gratis',
+  poster_url  VARCHAR(500)   NULL     COMMENT 'URL publik Vercel Blob Storage',
+  status      ENUM('Upcoming', 'Ongoing', 'Completed') NOT NULL DEFAULT 'Upcoming',
+  created_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

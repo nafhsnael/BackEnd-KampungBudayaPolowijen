@@ -17,6 +17,9 @@ const envSchema = z.object({
   DB_USER:     z.string().min(1, 'DB_USER is required'),
   DB_PASSWORD: z.string().default(''),
   DB_NAME:     z.string().min(1, 'DB_NAME is required'),
+
+  // ── Vercel Blob Storage ─────────────────────────────────────
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
 });
 
 const parseResult = envSchema.safeParse(process.env);

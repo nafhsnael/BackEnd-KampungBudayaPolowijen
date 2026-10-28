@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { AppError } from '../errors/app.error';
 import { ApiResponse } from '../utils/response.util';
 
@@ -9,6 +10,21 @@ export const globalErrorHandler = (
   _next: NextFunction
 ): Response => {
   console.error('💥 Error Caught in Middleware:', err);
+
+  // Handle Multer upload errors
+  if (err instanceof multer.MulterError || err.name === 'MulterError') {
+    let message = 'Kesalahan saat mengunggah file';
+    if ((err as any).code === 'LIMIT_FILE_SIZE') {
+      message = 'Ukuran file melebihi batas maksimal (5 MB)';
+    } else if ((err as any).code === 'LIMIT_UNEXPECTED_FILE') {
+      message = `Field upload tidak sesuai: ${(err as any).field || ''}`;
+    }
+    return ApiResponse.error({
+      res,
+      statusCode: 400,
+      message,
+    });
+  }
 
   if (err instanceof AppError) {
     let parsedErrors: any = undefined;
