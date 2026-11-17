@@ -5,12 +5,12 @@ import { z } from 'zod';
  */
 export const LoginSchema = z.object({
   email: z
-    .string({ required_error: 'Email is required' })
+    .string({ error: 'Email is required' })
     .email('Invalid email address format')
     .toLowerCase()
     .trim(),
   password: z
-    .string({ required_error: 'Password is required' })
+    .string({ error: 'Password is required' })
     .min(6, 'Password must be at least 6 characters long'),
 });
 
@@ -21,7 +21,7 @@ export type LoginDTO = z.infer<typeof LoginSchema>;
  */
 export const GoogleLoginSchema = z.object({
   idToken: z
-    .string({ required_error: 'Google ID Token is required' })
+    .string({ error: 'Google ID Token is required' })
     .min(1, 'Google ID Token cannot be empty'),
 });
 

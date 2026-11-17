@@ -5,6 +5,8 @@ import pool from '../config/database';
 import { storageService } from '../services/storage.service';
 import { ApiResponse } from '../utils/response.util';
 import { BadRequestError, NotFoundError } from '../errors/app.error';
+import { CreateUmkmSchema, UmkmListQuerySchema, UpdateUmkmSchema } from '../dtos/umkm.dto';
+import { parseValidatedInput } from '../utils/validation.util';
 
 interface UmkmRow extends RowDataPacket {
   id: string;
@@ -24,7 +26,7 @@ export class UmkmController {
    */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { category, search } = req.query;
+      const { category, search } = parseValidatedInput(UmkmListQuerySchema, req.query);
       const clauses: string[] = [];
       const values: any[] = [];
 
@@ -88,10 +90,7 @@ export class UmkmController {
    */
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { name, category, description, price } = req.body;
-      if (!name || !category) {
-        throw new BadRequestError('Nama UMKM dan Kategori wajib diisi.');
-      }
+      const { name, category, description, price } = parseValidatedInput(CreateUmkmSchema, req.body);
 
       let imageUrl: string | null = null;
 
@@ -107,7 +106,7 @@ export class UmkmController {
       }
 
       const id = uuidv4();
-      const parsedPrice = price ? parseFloat(price) : 0;
+      const parsedPrice = price;
 
       // 2. Simpan URL Vercel Blob langsung ke kolom image_url tabel MySQL
       await pool.query<ResultSetHeader>(
@@ -141,6 +140,11 @@ export class UmkmController {
    */
   update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const parsed = parseValidatedInput(UpdateUmkmSchema, req.body);
+      if (Object.keys(parsed).length === 0 && !req.file) {
+        throw new BadRequestError('Setidaknya satu data atau file gambar harus diperbarui.');
+      }
+
       const [existingRows] = await pool.query<UmkmRow[]>(
         `SELECT id, name, category, description, price, image_url FROM umkm WHERE id = ?`,
         [req.params.id]
@@ -165,17 +169,17 @@ export class UmkmController {
         if (existing.image_url && storageService.isBlobUrl(existing.image_url)) {
           await storageService.deleteFile(existing.image_url);
         }
-      } else if (req.body.imageUrl !== undefined) {
-        if (req.body.imageUrl !== existing.image_url && existing.image_url && storageService.isBlobUrl(existing.image_url)) {
+      } else if (parsed.imageUrl !== undefined) {
+        if (parsed.imageUrl !== existing.image_url && existing.image_url && storageService.isBlobUrl(existing.image_url)) {
           await storageService.deleteFile(existing.image_url);
         }
-        imageUrl = req.body.imageUrl;
+        imageUrl = parsed.imageUrl;
       }
 
-      const name = req.body.name ?? existing.name;
-      const category = req.body.category ?? existing.category;
-      const description = req.body.description ?? existing.description;
-      const price = req.body.price !== undefined ? parseFloat(req.body.price) : existing.price;
+      const name = parsed.name ?? existing.name;
+      const category = parsed.category ?? existing.category;
+      const description = parsed.description ?? existing.description;
+      const price = parsed.price ?? existing.price;
 
       // 2. Update database
       await pool.query<ResultSetHeader>(

@@ -19,6 +19,8 @@ UTS_KampungPolowijen/Backend/
 │   │   └── app.error.ts          # Class Error Kustom (AppError, Unauthorized, Bad Request)
 │   ├── middlewares/
 │   │   ├── error.middleware.ts   # Global Centralized Error Handling Middleware
+│   │   ├── rate-limit.middleware.ts # Rate limit API dan autentikasi
+│   │   ├── request-context.middleware.ts # Request ID dan request logger
 │   │   └── validate.middleware.ts# Middleware Validasi Schema Input Body (Zod)
 │   ├── models/
 │   │   └── user.model.ts         # User Interface / Entity
@@ -35,6 +37,7 @@ UTS_KampungPolowijen/Backend/
 │   │   ├── password.util.ts      # Helper Hashing & Verifikasi Password (bcryptjs)
 │   │   └── response.util.ts     # Helper Standardized JSON Response
 │   ├── app.ts                    # Setup Konfigurasi App Express
+│   ├── logger.ts                 # Structured request/error logging
 │   └── server.ts                 # Bootstrap & Server Entry Point
 ├── .env                          # Konfigurasi Environment Lokal
 ├── .env.example                  # Template File Environment
@@ -68,6 +71,33 @@ npm run type-check
 ```bash
 npm run build
 npm start
+```
+
+### Konfigurasi keamanan HTTP
+
+`src/app.ts` mengurutkan middleware request ID/logging, Helmet, CORS, parser
+request, pembatasan laju API, route, 404, lalu error handler. Di `.env`:
+
+- `CORS_ORIGINS`: origin frontend yang diizinkan, dipisahkan koma. Wajib diisi
+  pada production; gunakan origin tepat tanpa path.
+- `TRUST_PROXY_HOPS`: default `0`. Ubah hanya ke jumlah proxy tepercaya yang
+  benar-benar berada di depan backend agar IP klien dan rate limit akurat.
+- `API_RATE_LIMIT_*`: default 100 request per 15 menit per IP.
+- `AUTH_RATE_LIMIT_*`: default 10 request per 15 menit per IP untuk login dan
+  autentikasi Google.
+
+Rate limiter memakai memory store bawaan, sehingga batasnya berlaku per proses.
+Jika backend dijalankan dalam beberapa instance, konfigurasikan store bersama
+(misalnya Redis) sebelum mengandalkan batas rate limit lintas instance. Header
+dan body request, termasuk password, token, dan cookie, tidak dicatat oleh
+request logger. Setiap respons membawa `X-Request-ID` untuk korelasi log.
+
+Endpoint unggah `/api/upload` sekarang memerlukan autentikasi dan role `admin`.
+
+Jalankan pemeriksaan build dan tes HTTP dengan:
+
+```bash
+npm test
 ```
 
 ---

@@ -5,6 +5,8 @@ import pool from '../config/database';
 import { storageService } from '../services/storage.service';
 import { ApiResponse } from '../utils/response.util';
 import { BadRequestError, NotFoundError } from '../errors/app.error';
+import { CreateEventSchema, EventListQuerySchema, UpdateEventSchema } from '../dtos/event.dto';
+import { parseValidatedInput } from '../utils/validation.util';
 
 interface EventRow extends RowDataPacket {
   id: string;
@@ -26,7 +28,7 @@ export class EventController {
    */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { status, search } = req.query;
+      const { status, search } = parseValidatedInput(EventListQuerySchema, req.query);
       const clauses: string[] = [];
       const values: any[] = [];
 
@@ -92,10 +94,7 @@ export class EventController {
    */
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { name, description, eventDate, capacity, price, status } = req.body;
-      if (!name || !eventDate) {
-        throw new BadRequestError('Nama Event dan Tanggal Event wajib diisi.');
-      }
+      const { name, description, eventDate, capacity, price, status } = parseValidatedInput(CreateEventSchema, req.body);
 
       let posterUrl: string | null = null;
 
@@ -147,6 +146,11 @@ export class EventController {
    */
   update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const parsed = parseValidatedInput(UpdateEventSchema, req.body);
+      if (Object.keys(parsed).length === 0 && !req.file) {
+        throw new BadRequestError('Setidaknya satu data atau file poster harus diperbarui.');
+      }
+
       const [existingRows] = await pool.query<EventRow[]>(
         `SELECT id, name, description, event_date, capacity, price, poster_url, status 
          FROM events WHERE id = ?`,
@@ -172,19 +176,19 @@ export class EventController {
         if (existing.poster_url && storageService.isBlobUrl(existing.poster_url)) {
           await storageService.deleteFile(existing.poster_url);
         }
-      } else if (req.body.posterUrl !== undefined) {
-        if (req.body.posterUrl !== existing.poster_url && existing.poster_url && storageService.isBlobUrl(existing.poster_url)) {
+      } else if (parsed.posterUrl !== undefined) {
+        if (parsed.posterUrl !== existing.poster_url && existing.poster_url && storageService.isBlobUrl(existing.poster_url)) {
           await storageService.deleteFile(existing.poster_url);
         }
-        posterUrl = req.body.posterUrl;
+        posterUrl = parsed.posterUrl;
       }
 
-      const name = req.body.name ?? existing.name;
-      const description = req.body.description ?? existing.description;
-      const eventDate = req.body.eventDate ?? existing.event_date;
-      const capacity = req.body.capacity ?? existing.capacity;
-      const price = req.body.price ?? existing.price;
-      const status = req.body.status ?? existing.status;
+      const name = parsed.name ?? existing.name;
+      const description = parsed.description ?? existing.description;
+      const eventDate = parsed.eventDate ?? existing.event_date;
+      const capacity = parsed.capacity ?? existing.capacity;
+      const price = parsed.price ?? existing.price;
+      const status = parsed.status ?? existing.status;
 
       // 2. Update record di database
       await pool.query<ResultSetHeader>(

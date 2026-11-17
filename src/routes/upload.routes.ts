@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { uploadController } from '../controllers/upload.controller';
 import { uploadFile, uploadMultiple } from '../middlewares/upload.middleware';
 import { authMiddleware } from '../middlewares/auth.middleware';
+import { requireAdmin } from '../middlewares/role.middleware';
 
 const router = Router();
+
+router.use(authMiddleware, requireAdmin);
 
 /**
  * Upload single media
@@ -23,9 +26,9 @@ router.post('/multiple', uploadMultiple('files', 10), uploadController.uploadMul
  * Hapus media dari Vercel Blob
  * Endpoint: DELETE /api/upload
  * Body: { "url": "https://..." }
- * Wajib login
+ * Wajib login sebagai admin
  */
-router.delete('/', authMiddleware, uploadController.deleteMedia);
+router.delete('/', uploadController.deleteMedia);
 
 export default router;
 

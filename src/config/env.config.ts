@@ -10,6 +10,14 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   GOOGLE_CLIENT_ID: z.string().optional(),
+  CORS_ORIGINS: z.string().optional().transform((value) =>
+    value?.split(',').map((origin) => origin.trim()).filter(Boolean)
+  ),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(15 * 60 * 1000),
+  API_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(15 * 60 * 1000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
 
   // ── MySQL Database ─────────────────────────────────────────
   DB_HOST:     z.string().default('localhost'),
@@ -20,6 +28,28 @@ const envSchema = z.object({
 
   // ── Vercel Blob Storage ─────────────────────────────────────
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
+}).superRefine((config, context) => {
+  if (config.NODE_ENV === 'production' && !config.CORS_ORIGINS?.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['CORS_ORIGINS'],
+      message: 'CORS_ORIGINS must contain the frontend origin in production',
+    });
+  }
+
+  for (const origin of config.CORS_ORIGINS ?? []) {
+    try {
+      if (new URL(origin).origin !== origin) {
+        throw new Error('Origin must not include a path or trailing slash');
+      }
+    } catch {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CORS_ORIGINS'],
+        message: `Invalid CORS origin: ${origin}`,
+      });
+    }
+  }
 });
 
 const parseResult = envSchema.safeParse(process.env);

@@ -1,5 +1,4 @@
 import { NextFunction, Request, Response } from 'express';
-import { ZodError } from 'zod';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/app.error';
 import { AdminRepository } from '../repositories/admin.repository';
 import { PasswordUtil } from '../utils/password.util';
@@ -10,12 +9,7 @@ import {
   UpdateUserSchema,
   UserListQuerySchema,
 } from '../dtos/admin.dto';
-
-const validationMessage = (error: ZodError): string =>
-  JSON.stringify(error.errors.map((item) => ({
-    field: item.path.join('.'),
-    message: item.message,
-  })));
+import { parseValidatedInput } from '../utils/validation.util';
 
 export class AdminController {
   constructor(private readonly repository = new AdminRepository()) {}
@@ -34,19 +28,18 @@ export class AdminController {
 
   listUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const parsed = UserListQuerySchema.safeParse(req.query);
-      if (!parsed.success) throw new BadRequestError(validationMessage(parsed.error));
-      const result = await this.repository.listUsers(parsed.data);
+      const query = parseValidatedInput(UserListQuerySchema, req.query);
+      const result = await this.repository.listUsers(query);
       ApiResponse.success({
         res,
         message: 'Users retrieved',
         data: {
           ...result,
           pagination: {
-            page: parsed.data.page,
-            limit: parsed.data.limit,
+            page: query.page,
+            limit: query.limit,
             total: result.total,
-            totalPages: Math.ceil(result.total / parsed.data.limit),
+            totalPages: Math.ceil(result.total / query.limit),
           },
         },
       });
@@ -69,10 +62,9 @@ export class AdminController {
 
   createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const parsed = CreateUserSchema.safeParse(req.body);
-      if (!parsed.success) throw new BadRequestError(validationMessage(parsed.error));
+      const parsed = parseValidatedInput(CreateUserSchema, req.body);
 
-      let avatarUrl = parsed.data.avatarUrl;
+      let avatarUrl = parsed.avatarUrl;
 
       // Jika ada file avatar di-upload bersamaan via multipart form-data
       if (req.file) {
@@ -83,7 +75,7 @@ export class AdminController {
         avatarUrl = uploaded.url;
       }
 
-      const { password, ...user } = parsed.data;
+      const { password, ...user } = parsed;
       const created = await this.repository.createUser({
         ...user,
         avatarUrl,
@@ -103,17 +95,16 @@ export class AdminController {
 
   updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const parsed = UpdateUserSchema.safeParse(req.body);
-      if (!parsed.success) throw new BadRequestError(validationMessage(parsed.error));
+      const parsed = parseValidatedInput(UpdateUserSchema, req.body);
 
-      if (req.params.id === req.auth?.userId && (parsed.data.role === 'user' || parsed.data.access === 'user')) {
+      if (req.params.id === req.auth?.userId && (parsed.role === 'user' || parsed.access === 'user')) {
         throw new ForbiddenError('You cannot remove your own administrator access');
       }
 
       // Ambil data user eksisting untuk memeriksa avatar lama
       const existingUser = await this.repository.findUser(req.params.id);
 
-      let avatarUrl = parsed.data.avatarUrl;
+      let avatarUrl = parsed.avatarUrl;
 
       // Jika ada file avatar baru yang di-upload
       if (req.file) {
@@ -134,7 +125,7 @@ export class AdminController {
         }
       }
 
-      const { password, ...fields } = parsed.data;
+      const { password, ...fields } = parsed;
       const updated = await this.repository.updateUser(req.params.id, {
         ...fields,
         ...(avatarUrl !== undefined ? { avatarUrl } : {}),

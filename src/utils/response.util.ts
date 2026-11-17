@@ -5,7 +5,7 @@ export interface ApiResponseOptions<T = any> {
   statusCode?: number;
   message: string;
   data?: T;
-  errors?: any;
+  errors?: unknown;
 }
 
 export class ApiResponse {
@@ -21,7 +21,7 @@ export class ApiResponse {
     return res.status(statusCode).json({
       success: false,
       message,
-      ...(errors && { errors }),
+      ...(errors !== undefined ? { errors } : {}),
     });
   }
 }

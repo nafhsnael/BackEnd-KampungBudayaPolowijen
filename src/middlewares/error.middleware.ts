@@ -1,62 +1,86 @@
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { AppError } from '../errors/app.error';
+import { AppError, ValidationError } from '../errors/app.error';
+import { envConfig } from '../config/env.config';
+import { logger } from '../logger';
 import { ApiResponse } from '../utils/response.util';
 
 export const globalErrorHandler = (
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response,
-  _next: NextFunction
-): Response => {
-  console.error('💥 Error Caught in Middleware:', err);
+  next: NextFunction
+): void => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
 
-  // Handle Multer upload errors
-  if (err instanceof multer.MulterError || err.name === 'MulterError') {
+  const isProduction = envConfig.NODE_ENV === 'production';
+  const logFields = {
+    requestId: req.requestId,
+    errorName: err.name,
+    errorMessage: isProduction ? 'Request failed' : err.message,
+    ...(!isProduction ? { stack: err.stack } : {}),
+  };
+
+  if (err instanceof multer.MulterError) {
+    logger.warn({ ...logFields, statusCode: 400 });
     let message = 'Kesalahan saat mengunggah file';
-    if ((err as any).code === 'LIMIT_FILE_SIZE') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
       message = 'Ukuran file melebihi batas maksimal (5 MB)';
-    } else if ((err as any).code === 'LIMIT_UNEXPECTED_FILE') {
-      message = `Field upload tidak sesuai: ${(err as any).field || ''}`;
+    } else if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      message = `Field upload tidak sesuai: ${err.field || ''}`;
     }
-    return ApiResponse.error({
+    ApiResponse.error({
       res,
       statusCode: 400,
       message,
     });
+    return;
   }
 
-  if (err instanceof AppError) {
-    let parsedErrors: any = undefined;
-    
-    // Check if error message is JSON stringified validation error list
-    try {
-      if (err.message.startsWith('[')) {
-        parsedErrors = JSON.parse(err.message);
-        return ApiResponse.error({
-          res,
-          statusCode: err.statusCode,
-          message: 'Validation Error',
-          errors: parsedErrors,
-        });
-      }
-    } catch {
-      // Not JSON, continue normally
-    }
+  const parserError = err as Error & { type?: string };
+  if (parserError.type === 'entity.parse.failed') {
+    logger.warn({ ...logFields, statusCode: 400 });
+    ApiResponse.error({
+      res,
+      statusCode: 400,
+      message: 'Request body JSON tidak valid.',
+    });
+    return;
+  }
 
-    return ApiResponse.error({
+  if (parserError.type === 'entity.too.large') {
+    logger.warn({ ...logFields, statusCode: 413 });
+    ApiResponse.error({
+      res,
+      statusCode: 413,
+      message: 'Ukuran request melebihi batas yang diizinkan.',
+    });
+    return;
+  }
+
+  if (err instanceof AppError && err.isOperational && err.statusCode >= 400 && err.statusCode < 500) {
+    logger.warn({ ...logFields, statusCode: err.statusCode });
+    ApiResponse.error({
       res,
       statusCode: err.statusCode,
       message: err.message,
+      ...(err instanceof ValidationError ? { errors: err.errors } : {}),
     });
+    return;
   }
 
-  // Handle generic / unexpected server error
-  return ApiResponse.error({
+  logger.error({
+    ...logFields,
+    errorMessage: err.message,
+    stack: err.stack,
+    statusCode: 500,
+  });
+  ApiResponse.error({
     res,
     statusCode: 500,
-    message: process.env.NODE_ENV === 'production' 
-      ? 'Internal Server Error' 
-      : err.message || 'Something went wrong',
+    message: isProduction ? 'Internal Server Error' : err.message || 'Something went wrong',
   });
 };

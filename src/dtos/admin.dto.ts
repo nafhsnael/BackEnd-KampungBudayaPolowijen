@@ -5,7 +5,7 @@ const userFields = {
   fullName: z.string().max(150).trim().optional(),
   username: z.string().min(2).max(100).trim().optional(),
   roleTitle: z.string().max(100).trim().optional(),
-  role: z.string().trim().optional(),
+  role: z.enum(['user', 'admin']).optional(),
   access: z.enum(['user', 'admin']).optional(),
   status: z.enum(['Aktif', 'Suspended']).optional(),
   avatarUrl: z.string().url().max(500).nullable().optional(),
@@ -13,7 +13,7 @@ const userFields = {
 
 export const CreateUserSchema = z.object({
   ...userFields,
-  password: z.string().min(6).max(128).default('password123'),
+  password: z.string().min(6).max(128),
 });
 
 export const UpdateUserSchema = z

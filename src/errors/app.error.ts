@@ -17,6 +17,12 @@ export class BadRequestError extends AppError {
   }
 }
 
+export class ValidationError extends BadRequestError {
+  constructor(public readonly errors: Array<{ field: string; message: string }>) {
+    super('Validation Error');
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message: string = 'Unauthorized access') {
     super(message, 401);
