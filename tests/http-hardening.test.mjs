@@ -24,6 +24,8 @@ const [
   validationUtilModule,
   eventDtoModule,
   umkmDtoModule,
+  packageDtoModule,
+  routineScheduleDtoModule,
   zodModule,
 ] = await Promise.all([
   import('../dist/app.js'),
@@ -33,6 +35,8 @@ const [
   import('../dist/utils/validation.util.js'),
   import('../dist/dtos/event.dto.js'),
   import('../dist/dtos/umkm.dto.js'),
+  import('../dist/dtos/package.dto.js'),
+  import('../dist/dtos/routine-schedule.dto.js'),
   import('zod'),
 ]);
 const app = appModule.default.default ?? appModule.default;
@@ -42,6 +46,8 @@ const { validateBody } = validationModule;
 const { parseValidatedInput } = validationUtilModule;
 const { CreateEventSchema } = eventDtoModule;
 const { CreateUmkmSchema } = umkmDtoModule;
+const { CreatePackageSchema } = packageDtoModule;
+const { CreateRoutineScheduleSchema } = routineScheduleDtoModule;
 const { z } = zodModule;
 
 let server;
@@ -165,11 +171,50 @@ test('event and UMKM payloads are normalized and invalid values become validatio
   );
 });
 
+test('package payloads apply defaults and reject invalid prices', () => {
+  const packageData = parseValidatedInput(CreatePackageSchema, {
+    name: '  Sambang Kampung  ',
+    price: '125000',
+  });
+
+  assert.equal(packageData.name, 'Sambang Kampung');
+  assert.equal(packageData.price, 125000);
+  assert.equal(packageData.isActive, true);
+
+  assert.throws(
+    () => parseValidatedInput(CreatePackageSchema, { name: 'Paket', price: '-1' }),
+    (error) => error.statusCode === 400 && error.errors.some((issue) => issue.field === 'price'),
+  );
+});
+
+test('routine schedule payloads normalize values and reject unsupported weekdays', () => {
+  const schedule = parseValidatedInput(CreateRoutineScheduleSchema, {
+    name: '  Sarasehan Budaya  ',
+    day: 'Jumat',
+    capacity: '20 Orang',
+    price: 'Rp 50.000',
+  });
+
+  assert.equal(schedule.name, 'Sarasehan Budaya');
+  assert.equal(schedule.day, 'Jumat');
+  assert.throws(
+    () => parseValidatedInput(CreateRoutineScheduleSchema, {
+      name: 'Sarasehan',
+      day: 'Hari Libur',
+    }),
+    (error) => error.statusCode === 400 && error.errors.some((issue) => issue.field === 'day'),
+  );
+});
+
 test('protected admin and upload routes return 401 without a token', async () => {
   const adminResponse = await fetch(`${baseUrl}/api/admin/dashboard/stats`);
+  const packagesResponse = await fetch(`${baseUrl}/api/admin/packages`);
+  const schedulesResponse = await fetch(`${baseUrl}/api/admin/routine-schedules`);
   const uploadResponse = await fetch(`${baseUrl}/api/upload`, { method: 'POST' });
 
   assert.equal(adminResponse.status, 401);
+  assert.equal(packagesResponse.status, 401);
+  assert.equal(schedulesResponse.status, 401);
   assert.equal(uploadResponse.status, 401);
 });
 

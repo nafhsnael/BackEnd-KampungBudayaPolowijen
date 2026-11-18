@@ -3,6 +3,8 @@ import { AdminController } from '../controllers/admin.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { requireAdmin } from '../middlewares/role.middleware';
 import { uploadAvatar } from '../middlewares/upload.middleware';
+import { packageController } from '../controllers/package.controller';
+import { routineScheduleController } from '../controllers/routine-schedule.controller';
 
 const router = Router();
 const controller = new AdminController();
@@ -11,6 +13,14 @@ const controller = new AdminController();
 router.use(authMiddleware, requireAdmin);
 
 router.get('/dashboard/stats', controller.dashboardStats);
+router.get('/packages', packageController.list);
+router.post('/packages', packageController.create);
+router.put('/packages/:id', packageController.update);
+router.delete('/packages/:id', packageController.delete);
+router.get('/routine-schedules', routineScheduleController.list);
+router.post('/routine-schedules', routineScheduleController.create);
+router.put('/routine-schedules/:id', routineScheduleController.update);
+router.delete('/routine-schedules/:id', routineScheduleController.delete);
 router.get('/users', controller.listUsers);
 router.post('/users', uploadAvatar, controller.createUser);
 router.get('/users/:id', controller.getUser);

@@ -134,13 +134,29 @@ Semua route `/api/admin/*` memerlukan token pengguna berperanan `admin`.
 | `GET` | `/api/admin/users/:id` | Dapatkan butiran pengguna |
 | `PUT` | `/api/admin/users/:id` | Kemaskini satu atau lebih medan |
 | `DELETE` | `/api/admin/users/:id` | Padam pengguna |
+| `GET` | `/api/admin/packages` | Senarai dan carian paket kunjungan |
+| `POST` | `/api/admin/packages` | Cipta paket kunjungan |
+| `PUT` | `/api/admin/packages/:id` | Kemaskini paket kunjungan |
+| `DELETE` | `/api/admin/packages/:id` | Padam paket kunjungan |
+| `GET` | `/api/admin/routine-schedules` | Senarai jadual rutin mingguan |
+| `POST` | `/api/admin/routine-schedules` | Cipta jadual rutin |
+| `PUT` | `/api/admin/routine-schedules/:id` | Kemaskini jadual rutin |
+| `DELETE` | `/api/admin/routine-schedules/:id` | Padam jadual rutin |
 
 Body cipta pengguna: `{ "email": "...", "fullName": "...", "password": "...", "role": "user" }`.
 Kemaskini menerima `email`, `fullName`, `password`, `role`, dan/atau `avatarUrl`.
 Senarai memulangkan `data.users`, `data.total` dan metadata `data.pagination`.
 Statistik memulangkan `totalUsers`, `totalUmkm`, `totalEvents`, dan `activePackages`.
-Statistik modul UMKM, event, atau paket ialah `null` sehingga jadual berkenaan wujud;
-skema sekarang hanya menyediakan jadual `users`.
+Jumlah UMKM/event/paket ialah `null` jika jadual modul tersebut belum wujud.
+Jadual rutin menerima `name`, `day` (Senin hingga Minggu), `description`,
+`capacity`, `price`, dan `imageUrl`.
+
+Jalankan `database/migration_admin_content.sql` sekali pada database sedia ada
+untuk menyediakan jadual UMKM, event, dan paket yang belum tersedia. Jalankan
+`database/migration_routine_schedules.sql` untuk menambahkan jadual rutin mingguan.
+Migrasi ini tidak memasukkan data seed. Jadual `packages` menyimpan nama, deskripsi,
+durasi, kapasitas, harga, URL gambar, dan status aktif; `routine_schedules` menyimpan
+nama kegiatan, hari, deskripsi, kapasitas, harga, dan URL gambar.
 
 ### Endpoint auth terdahulu
 
