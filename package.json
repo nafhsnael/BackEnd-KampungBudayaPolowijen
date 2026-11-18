@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
+    "seed:umkm": "node scripts/seed-umkm.mjs",
+    "seed:events": "node scripts/seed-events.mjs",
     "test": "npm run build && node --test tests/http-hardening.test.mjs"
   },
   "keywords": [],
