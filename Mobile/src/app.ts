@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 import { errorHandler, HttpError } from './errors';
 import authRoutes from './routes/auth.routes';
+import contentRoutes from './routes/content.routes';
 import profileRoutes from './routes/profile.routes';
 import umkmRoutes, { wishlistRouter } from './routes/umkm.routes';
 
@@ -37,6 +38,7 @@ app.use('/api/v1/auth', rateLimit({
 
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/content', contentRoutes);
 app.use('/api/v1/profile', profileRoutes);
 app.use('/api/v1/umkm', umkmRoutes);
 app.use('/api/v1/wishlist', wishlistRouter);

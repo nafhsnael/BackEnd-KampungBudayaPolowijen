@@ -27,6 +27,17 @@ database backend yang sudah ada.
 API berjalan pada `http://localhost:5001`; pemeriksaan status tersedia di
 `GET /health`. Upload foto profil memerlukan `BLOB_READ_WRITE_TOKEN`; semua
 endpoint lain dapat digunakan tanpa konfigurasi penyimpanan tersebut.
+API mobile membaca tabel konten yang sama dengan admin. Untuk menjalankan
+Flutter di Android Emulator, jalankan API ini dan gunakan host bawaan
+`10.0.2.2`. Untuk perangkat fisik atau build selain debug, atur
+`MOBILE_API_BASE_URL`, misalnya:
+
+```powershell
+flutter run --dart-define=MOBILE_API_BASE_URL=https://api.example.com/api/v1
+```
+
+Pastikan API dan backend admin terhubung ke database `kampung_polowijen` yang
+sama.
 
 ## Endpoint
 
@@ -42,6 +53,9 @@ Semua endpoint berada di bawah `/api/v1`. Login menggunakan
 | `GET` | `/profile` | Login | Ambil profil sendiri |
 | `PATCH` | `/profile` | Login | Ubah `name` dan/atau unggah `photo` (JPG/PNG, maks. 2 MB) |
 | `PUT` | `/profile/password` | Login | Ubah password (`currentPassword`, `password`, `passwordConfirmation`) |
+| `GET` | `/content/events` | Publik | Daftar event yang dikelola admin |
+| `GET` | `/content/packages` | Publik | Daftar paket kunjungan beserta status aktif |
+| `GET` | `/content/routine-schedules` | Publik | Jadwal rutin mingguan |
 | `GET` | `/umkm/categories` | Publik | Kategori produk |
 | `GET` | `/umkm?category=Kriya&q=topeng&page=1&per_page=10` | Publik/Opsional | Daftar UMKM; token opsional menambahkan `is_wishlisted` |
 | `GET` | `/umkm/:id` | Publik/Opsional | Detail UMKM dan galeri |
