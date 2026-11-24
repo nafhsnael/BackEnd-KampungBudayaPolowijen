@@ -10,6 +10,7 @@ import {
 } from '../dtos/package.dto';
 import { parseValidatedInput } from '../utils/validation.util';
 import { ApiResponse } from '../utils/response.util';
+import { cloudinaryStorageService, deleteStoredImage } from '../services/cloudinary-storage.service';
 
 interface PackageRow extends RowDataPacket {
   id: string;
@@ -61,6 +62,12 @@ export class PackageController {
     try {
       const data = parseValidatedInput(CreatePackageSchema, req.body);
       const id = uuidv4();
+      const imageUrl = req.file
+        ? (await cloudinaryStorageService.uploadFile(req.file, {
+            folder: 'packages',
+            filenamePrefix: 'package',
+          })).url
+        : data.imageUrl ?? null;
 
       await pool.query<ResultSetHeader>(
         `INSERT INTO packages (id, name, description, duration, capacity, price, image_url, is_active)
@@ -72,7 +79,7 @@ export class PackageController {
           data.duration ?? null,
           data.capacity ?? null,
           data.price,
-          data.imageUrl ?? null,
+          imageUrl,
           data.isActive,
         ]
       );
@@ -87,7 +94,7 @@ export class PackageController {
           description: data.description ?? '',
           duration: data.duration ?? '',
           capacity: data.capacity ?? '',
-          imageUrl: data.imageUrl ?? null,
+          imageUrl,
         },
       });
     } catch (error) {
@@ -98,18 +105,26 @@ export class PackageController {
   update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const data = parseValidatedInput(UpdatePackageSchema, req.body);
-      if (Object.keys(data).length === 0) {
+      if (Object.keys(data).length === 0 && !req.file) {
         throw new BadRequestError('Setidaknya satu data harus diperbarui.');
       }
 
       const existing = await this.findById(req.params.id);
+      const imageUrl = req.file
+        ? (await cloudinaryStorageService.uploadFile(req.file, {
+            folder: 'packages',
+            filenamePrefix: 'package',
+          })).url
+        : data.imageUrl === undefined
+          ? existing.imageUrl
+          : data.imageUrl;
       const updated = {
         name: data.name ?? existing.name,
         description: data.description === undefined ? existing.description : data.description ?? '',
         duration: data.duration === undefined ? existing.duration : data.duration ?? '',
         capacity: data.capacity === undefined ? existing.capacity : data.capacity ?? '',
         price: data.price ?? existing.price,
-        imageUrl: data.imageUrl === undefined ? existing.imageUrl : data.imageUrl,
+        imageUrl,
         isActive: data.isActive ?? existing.isActive,
       };
 
@@ -129,6 +144,10 @@ export class PackageController {
         ]
       );
 
+      if (imageUrl !== existing.imageUrl) {
+        await deleteStoredImage(existing.imageUrl);
+      }
+
       ApiResponse.success({
         res,
         message: 'Paket berhasil diperbarui',
@@ -141,6 +160,7 @@ export class PackageController {
 
   delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const existing = await this.findById(req.params.id);
       const [result] = await pool.query<ResultSetHeader>(
         'DELETE FROM packages WHERE id = ?',
         [req.params.id]
@@ -149,6 +169,8 @@ export class PackageController {
       if (result.affectedRows === 0) {
         throw new NotFoundError('Paket tidak ditemukan.');
       }
+
+      await deleteStoredImage(existing.imageUrl);
 
       ApiResponse.success({
         res,

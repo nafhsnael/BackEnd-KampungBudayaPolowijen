@@ -28,7 +28,25 @@ const envSchema = z.object({
 
   // ── Vercel Blob Storage ─────────────────────────────────────
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
+
+  // ── Cloudinary image storage ────────────────────────────────
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
 }).superRefine((config, context) => {
+  const cloudinaryValues = [
+    config.CLOUDINARY_CLOUD_NAME,
+    config.CLOUDINARY_API_KEY,
+    config.CLOUDINARY_API_SECRET,
+  ];
+  if (cloudinaryValues.some(Boolean) && !cloudinaryValues.every(Boolean)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['CLOUDINARY_CLOUD_NAME'],
+      message: 'CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET must be configured together',
+    });
+  }
+
   if (config.NODE_ENV === 'production' && !config.CORS_ORIGINS?.length) {
     context.addIssue({
       code: z.ZodIssueCode.custom,

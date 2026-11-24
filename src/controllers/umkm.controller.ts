@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database';
-import { storageService } from '../services/storage.service';
+import { cloudinaryStorageService, deleteStoredImage } from '../services/cloudinary-storage.service';
 import { ApiResponse } from '../utils/response.util';
 import { BadRequestError, NotFoundError } from '../errors/app.error';
 import { CreateUmkmSchema, UmkmListQuerySchema, UpdateUmkmSchema } from '../dtos/umkm.dto';
@@ -84,7 +84,7 @@ export class UmkmController {
   };
 
   /**
-   * Tambah UMKM baru + Upload Gambar ke Vercel Blob
+   * Tambah UMKM baru + Upload Gambar ke Cloudinary
    * POST /api/umkm
    * Form-Data: name, category, description, price, image=<binary>
    */
@@ -94,9 +94,9 @@ export class UmkmController {
 
       let imageUrl: string | null = null;
 
-      // 1. Upload gambar produk ke Vercel Blob Storage jika ada file
+      // Upload gambar produk ke Cloudinary jika ada file
       if (req.file) {
-        const uploadResult = await storageService.uploadFile(req.file, {
+        const uploadResult = await cloudinaryStorageService.uploadFile(req.file, {
           folder: 'umkm',
           filenamePrefix: 'umkm-prod',
         });
@@ -108,7 +108,7 @@ export class UmkmController {
       const id = uuidv4();
       const parsedPrice = price;
 
-      // 2. Simpan URL Vercel Blob langsung ke kolom image_url tabel MySQL
+      // Simpan URL Cloudinary langsung ke kolom image_url tabel MySQL
       await pool.query<ResultSetHeader>(
         `INSERT INTO umkm (id, name, category, description, price, image_url)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -118,7 +118,7 @@ export class UmkmController {
       ApiResponse.success({
         res,
         statusCode: 201,
-        message: 'UMKM berhasil dibuat dengan media tersimpan di Vercel Blob',
+        message: 'UMKM berhasil dibuat dengan media tersimpan di Cloudinary',
         data: {
           id,
           name,
@@ -134,7 +134,7 @@ export class UmkmController {
   };
 
   /**
-   * Update UMKM + Ganti Gambar di Vercel Blob (Otomatis hapus gambar lama)
+   * Update UMKM + Ganti Gambar di Cloudinary
    * PUT /api/umkm/:id
    * Form-Data: name, category, description, price, image=<binary>
    */
@@ -159,20 +159,12 @@ export class UmkmController {
 
       // 1. Jika ada upload gambar baru: upload ke Vercel Blob & hapus gambar lama
       if (req.file) {
-        const uploadResult = await storageService.uploadFile(req.file, {
+        const uploadResult = await cloudinaryStorageService.uploadFile(req.file, {
           folder: 'umkm',
           filenamePrefix: 'umkm-prod',
         });
         imageUrl = uploadResult.url;
-
-        // Hapus file lama dari Vercel Blob
-        if (existing.image_url && storageService.isBlobUrl(existing.image_url)) {
-          await storageService.deleteFile(existing.image_url);
-        }
       } else if (parsed.imageUrl !== undefined) {
-        if (parsed.imageUrl !== existing.image_url && existing.image_url && storageService.isBlobUrl(existing.image_url)) {
-          await storageService.deleteFile(existing.image_url);
-        }
         imageUrl = parsed.imageUrl;
       }
 
@@ -187,6 +179,10 @@ export class UmkmController {
          WHERE id = ?`,
         [name, category, description, price, imageUrl, req.params.id]
       );
+
+      if (imageUrl !== existing.image_url) {
+        await deleteStoredImage(existing.image_url);
+      }
 
       ApiResponse.success({
         res,
@@ -206,7 +202,7 @@ export class UmkmController {
   };
 
   /**
-   * Hapus UMKM + Hapus File Gambar dari Vercel Blob Storage
+   * Hapus UMKM + Hapus File Gambar dari Cloudinary atau Vercel Blob Storage
    * DELETE /api/umkm/:id
    */
   delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -226,9 +222,7 @@ export class UmkmController {
       await pool.query<ResultSetHeader>(`DELETE FROM umkm WHERE id = ?`, [req.params.id]);
 
       // 2. Hapus file dari Vercel Blob Storage jika ada
-      if (existing.image_url && storageService.isBlobUrl(existing.image_url)) {
-        await storageService.deleteFile(existing.image_url);
-      }
+      await deleteStoredImage(existing.image_url);
 
       ApiResponse.success({
         res,

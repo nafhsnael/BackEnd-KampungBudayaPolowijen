@@ -181,6 +181,13 @@ test('package payloads apply defaults and reject invalid prices', () => {
   assert.equal(packageData.price, 125000);
   assert.equal(packageData.isActive, true);
 
+  const multipartPackage = parseValidatedInput(CreatePackageSchema, {
+    name: 'Paket Foto',
+    price: '125000',
+    isActive: 'false',
+  });
+  assert.equal(multipartPackage.isActive, false);
+
   assert.throws(
     () => parseValidatedInput(CreatePackageSchema, { name: 'Paket', price: '-1' }),
     (error) => error.statusCode === 400 && error.errors.some((issue) => issue.field === 'price'),

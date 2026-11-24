@@ -6,7 +6,7 @@ import { BadRequestError } from '../errors/app.error';
  * Konfigurasi Multer dengan Memory Storage.
  * File TIDAK disimpan ke disk lokal (folder public/), melainkan langsung disimpan
  * di RAM sebagai Buffer (req.file.buffer) sehingga backend bersifat 100% stateless
- * dan siap di-stream / di-upload langsung ke Vercel Blob Storage.
+ * dan siap di-stream ke layanan penyimpanan media.
  */
 const memoryStorage = multer.memoryStorage();
 

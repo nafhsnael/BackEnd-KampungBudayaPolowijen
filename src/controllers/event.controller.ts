@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database';
-import { storageService } from '../services/storage.service';
+import { cloudinaryStorageService, deleteStoredImage } from '../services/cloudinary-storage.service';
 import { ApiResponse } from '../utils/response.util';
 import { BadRequestError, NotFoundError } from '../errors/app.error';
 import { CreateEventSchema, EventListQuerySchema, UpdateEventSchema } from '../dtos/event.dto';
@@ -44,7 +44,7 @@ export class EventController {
 
       const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
       const [rows] = await pool.query<EventRow[]>(
-        `SELECT id, name, description, event_date AS eventDate, capacity, price, 
+        `SELECT id, name, description, DATE_FORMAT(event_date, '%Y-%m-%d') AS eventDate, capacity, price, 
                 poster_url AS posterUrl, status, created_at, updated_at
          FROM events ${whereSql} ORDER BY event_date ASC`,
         values
@@ -67,7 +67,7 @@ export class EventController {
   getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const [rows] = await pool.query<EventRow[]>(
-        `SELECT id, name, description, event_date AS eventDate, capacity, price, 
+        `SELECT id, name, description, DATE_FORMAT(event_date, '%Y-%m-%d') AS eventDate, capacity, price, 
                 poster_url AS posterUrl, status, created_at, updated_at
          FROM events WHERE id = ?`,
         [req.params.id]
@@ -88,7 +88,7 @@ export class EventController {
   };
 
   /**
-   * Tambah Event baru + Upload Poster ke Vercel Blob Storage
+   * Tambah Event baru + Upload Poster ke Cloudinary
    * POST /api/events
    * Form-Data: name, description, eventDate, capacity, price, poster=<binary>
    */
@@ -98,9 +98,9 @@ export class EventController {
 
       let posterUrl: string | null = null;
 
-      // 1. Upload poster event ke Vercel Blob jika file dikirim
+      // Upload poster event ke Cloudinary jika file dikirim
       if (req.file) {
-        const uploadResult = await storageService.uploadFile(req.file, {
+        const uploadResult = await cloudinaryStorageService.uploadFile(req.file, {
           folder: 'events',
           filenamePrefix: 'event-poster',
         });
@@ -112,7 +112,7 @@ export class EventController {
       const id = uuidv4();
       const eventStatus = status || 'Upcoming';
 
-      // 2. Simpan URL Vercel Blob langsung ke database MySQL
+      // Simpan URL Cloudinary langsung ke database MySQL
       await pool.query<ResultSetHeader>(
         `INSERT INTO events (id, name, description, event_date, capacity, price, poster_url, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -122,7 +122,7 @@ export class EventController {
       ApiResponse.success({
         res,
         statusCode: 201,
-        message: 'Event berhasil dibuat dengan poster tersimpan di Vercel Blob',
+        message: 'Event berhasil dibuat dengan poster tersimpan di Cloudinary',
         data: {
           id,
           name,
@@ -140,7 +140,7 @@ export class EventController {
   };
 
   /**
-   * Update Event + Ganti Poster di Vercel Blob (Otomatis hapus poster lama)
+   * Update Event + Ganti Poster di Cloudinary
    * PUT /api/events/:id
    * Form-Data: name, description, eventDate, capacity, price, poster=<binary>
    */
@@ -166,20 +166,12 @@ export class EventController {
 
       // 1. Jika ada upload file poster baru
       if (req.file) {
-        const uploadResult = await storageService.uploadFile(req.file, {
+        const uploadResult = await cloudinaryStorageService.uploadFile(req.file, {
           folder: 'events',
           filenamePrefix: 'event-poster',
         });
         posterUrl = uploadResult.url;
-
-        // Hapus poster lama dari Vercel Blob
-        if (existing.poster_url && storageService.isBlobUrl(existing.poster_url)) {
-          await storageService.deleteFile(existing.poster_url);
-        }
       } else if (parsed.posterUrl !== undefined) {
-        if (parsed.posterUrl !== existing.poster_url && existing.poster_url && storageService.isBlobUrl(existing.poster_url)) {
-          await storageService.deleteFile(existing.poster_url);
-        }
         posterUrl = parsed.posterUrl;
       }
 
@@ -197,6 +189,10 @@ export class EventController {
          WHERE id = ?`,
         [name, description, eventDate, capacity, price, posterUrl, status, req.params.id]
       );
+
+      if (posterUrl !== existing.poster_url) {
+        await deleteStoredImage(existing.poster_url);
+      }
 
       ApiResponse.success({
         res,
@@ -218,7 +214,7 @@ export class EventController {
   };
 
   /**
-   * Hapus Event + Hapus Poster dari Vercel Blob Storage
+   * Hapus Event + Hapus Poster dari Cloudinary atau Vercel Blob Storage
    * DELETE /api/events/:id
    */
   delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -238,9 +234,7 @@ export class EventController {
       await pool.query<ResultSetHeader>(`DELETE FROM events WHERE id = ?`, [req.params.id]);
 
       // 2. Hapus file poster dari Vercel Blob Storage jika ada
-      if (existing.poster_url && storageService.isBlobUrl(existing.poster_url)) {
-        await storageService.deleteFile(existing.poster_url);
-      }
+      await deleteStoredImage(existing.poster_url);
 
       ApiResponse.success({
         res,

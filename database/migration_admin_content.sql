@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS routine_schedules (
   id          VARCHAR(36)    NOT NULL,
   name        VARCHAR(150)   NOT NULL,
   day         ENUM('Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu') NOT NULL,
+  start_time  TIME           NULL,
+  end_time    TIME           NULL,
   description TEXT           NULL,
   capacity    VARCHAR(100)   NULL,
   price       VARCHAR(100)   NULL,

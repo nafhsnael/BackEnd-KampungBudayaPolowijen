@@ -81,7 +81,7 @@ ON DUPLICATE KEY UPDATE
 
 
 -- ============================================================
--- Tabel: umkm (Data Usaha Mikro Kecil & Menengah + URL Gambar Vercel Blob)
+-- Tabel: umkm (Data Usaha Mikro Kecil & Menengah + URL gambar)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS umkm (
   id          VARCHAR(36)    NOT NULL DEFAULT (UUID()),
@@ -89,14 +89,14 @@ CREATE TABLE IF NOT EXISTS umkm (
   category    VARCHAR(100)   NOT NULL COMMENT 'Kriya, Kuliner, Minuman, dll.',
   description TEXT           NULL,
   price       DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-  image_url   VARCHAR(500)   NULL     COMMENT 'URL publik Vercel Blob Storage',
+  image_url   VARCHAR(500)   NULL     COMMENT 'URL publik gambar',
   created_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
--- Tabel: events (Data Event/Agenda Budaya + URL Poster Vercel Blob)
+-- Tabel: events (Data Event/Agenda Budaya + URL poster)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS events (
   id          VARCHAR(36)    NOT NULL DEFAULT (UUID()),
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS events (
   event_date  DATE           NOT NULL,
   capacity    VARCHAR(100)   NULL DEFAULT '50 Orang',
   price       VARCHAR(100)   NULL DEFAULT 'Gratis',
-  poster_url  VARCHAR(500)   NULL     COMMENT 'URL publik Vercel Blob Storage',
+  poster_url  VARCHAR(500)   NULL     COMMENT 'URL publik poster',
   status      ENUM('Upcoming', 'Ongoing', 'Completed') NOT NULL DEFAULT 'Upcoming',
   created_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS routine_schedules (
   id          VARCHAR(36)    NOT NULL,
   name        VARCHAR(150)   NOT NULL,
   day         ENUM('Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu') NOT NULL,
+  start_time  TIME           NULL,
+  end_time    TIME           NULL,
   description TEXT           NULL,
   capacity    VARCHAR(100)   NULL,
   price       VARCHAR(100)   NULL,
