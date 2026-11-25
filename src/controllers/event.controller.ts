@@ -3,6 +3,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/database';
 import { cloudinaryStorageService, deleteStoredImage } from '../services/cloudinary-storage.service';
+import { storageService } from '../services/storage.service';
 import { ApiResponse } from '../utils/response.util';
 import { BadRequestError, NotFoundError } from '../errors/app.error';
 import { CreateEventSchema, EventListQuerySchema, UpdateEventSchema } from '../dtos/event.dto';
@@ -19,6 +20,30 @@ interface EventRow extends RowDataPacket {
   status: string;
   created_at: Date;
   updated_at: Date;
+}
+
+async function uploadEventPoster(file: Express.Multer.File): Promise<string | null> {
+  try {
+    const uploadResult = await cloudinaryStorageService.uploadFile(file, {
+      folder: 'events',
+      filenamePrefix: 'event-poster',
+    });
+    return uploadResult.url;
+  } catch (cloudinaryError) {
+    try {
+      const uploadResult = await storageService.uploadFile(file, {
+        folder: 'events',
+        filenamePrefix: 'event-poster',
+      });
+      return uploadResult.url;
+    } catch (blobError) {
+      console.warn(
+        'Event poster upload skipped; Cloudinary and Vercel Blob are unavailable:',
+        blobError instanceof Error ? blobError.message : String(blobError)
+      );
+      return null;
+    }
+  }
 }
 
 export class EventController {
@@ -100,11 +125,7 @@ export class EventController {
 
       // Upload poster event ke Cloudinary jika file dikirim
       if (req.file) {
-        const uploadResult = await cloudinaryStorageService.uploadFile(req.file, {
-          folder: 'events',
-          filenamePrefix: 'event-poster',
-        });
-        posterUrl = uploadResult.url;
+        posterUrl = await uploadEventPoster(req.file);
       } else if (req.body.posterUrl) {
         posterUrl = req.body.posterUrl;
       }
@@ -166,11 +187,7 @@ export class EventController {
 
       // 1. Jika ada upload file poster baru
       if (req.file) {
-        const uploadResult = await cloudinaryStorageService.uploadFile(req.file, {
-          folder: 'events',
-          filenamePrefix: 'event-poster',
-        });
-        posterUrl = uploadResult.url;
+        posterUrl = await uploadEventPoster(req.file);
       } else if (parsed.posterUrl !== undefined) {
         posterUrl = parsed.posterUrl;
       }

@@ -17,6 +17,7 @@ const sampleEvents = [
     capacity: "120 Kursi",
     price: "Rp. 50.000 / Orang",
     status: "Upcoming",
+    posterUrl: "https://0p5ckc0e2ixb1mde.public.blob.vercel-storage.com/static-assets/images/taritopeng.png",
   },
   {
     id: "dummy-festival-batik",
@@ -27,6 +28,7 @@ const sampleEvents = [
     capacity: "120 Kursi",
     price: "Rp. 50.000 / Orang",
     status: "Completed",
+    posterUrl: "https://0p5ckc0e2ixb1mde.public.blob.vercel-storage.com/static-assets/images/batik.jpeg",
   },
   {
     id: "dummy-megengan-nyadran",
@@ -37,6 +39,7 @@ const sampleEvents = [
     capacity: "120 Kursi",
     price: "Rp. 50.000 / Orang",
     status: "Completed",
+    posterUrl: "https://0p5ckc0e2ixb1mde.public.blob.vercel-storage.com/static-assets/images/nyadran.png",
   },
 ];
 
@@ -61,7 +64,7 @@ async function seedEvents() {
       const [result] = await connection.execute(
         `INSERT INTO events
           (id, name, description, event_date, capacity, price, poster_url, status)
-         SELECT ?, ?, ?, ?, ?, ?, NULL, ?
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?
          FROM DUAL
          WHERE NOT EXISTS (
            SELECT 1 FROM events WHERE id = ? OR name = ?
@@ -73,12 +76,20 @@ async function seedEvents() {
           event.eventDate,
           event.capacity,
           event.price,
+          event.posterUrl,
           event.status,
           event.id,
           event.name,
         ]
       );
       inserted += result.affectedRows;
+    }
+
+    for (const event of sampleEvents) {
+      await connection.execute(
+        "UPDATE events SET poster_url = ? WHERE name = ? AND (poster_url IS NULL OR poster_url = '')",
+        [event.posterUrl, event.name]
+      );
     }
 
     console.log(
