@@ -311,3 +311,18 @@ test('the general API limiter returns 429 after its configured limit', async () 
   });
   assert.equal(malformedResponse.status, 429);
 });
+
+test('auth routes use their dedicated limiter after the general API limit is exhausted', async () => {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'invalid', password: '123' }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 429);
+  assert.equal(
+    body.message,
+    'Terlalu banyak percobaan autentikasi. Silakan coba lagi nanti.',
+  );
+});
